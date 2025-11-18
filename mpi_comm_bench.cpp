@@ -4,14 +4,11 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <mpi.h>
-#include <numeric>
 #include <optional>
 #include <thread>
-#include <vector>
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
@@ -82,14 +79,12 @@ int main( int argc, char** argv )
     size_t msg_size     = 1024 * 1024;
     double interval_sec = 1.0;
 
-    auto msg_size_opt = get_flag_value( argc, argv, "--msg-size" );
-    if ( msg_size_opt.has_value() )
+    if ( const auto msg_size_opt = get_flag_value( argc, argv, "--msg-size" ); msg_size_opt.has_value() )
     {
         msg_size = static_cast< size_t >( std::stod( msg_size_opt.value() ) );
     }
 
-    auto interval_sec_opt = get_flag_value( argc, argv, "--interval" );
-    if ( interval_sec_opt.has_value() )
+    if ( const auto interval_sec_opt = get_flag_value( argc, argv, "--interval" ); interval_sec_opt.has_value() )
     {
         interval_sec = ( std::stod( interval_sec_opt.value() ) );
     }
@@ -105,8 +100,8 @@ int main( int argc, char** argv )
         std::cout << "GPU mode:     " << ( use_gpu ? "on" : "off" ) << std::endl;
     }
 
-    int next = ( rank + 1 ) % num_processes;
-    int prev = ( rank - 1 + num_processes ) % num_processes;
+    const int next = ( rank + 1 ) % num_processes;
+    const int prev = ( rank - 1 + num_processes ) % num_processes;
 
     unsigned char* send_buf = nullptr;
     unsigned char* recv_buf = nullptr;
@@ -169,7 +164,7 @@ int main( int argc, char** argv )
         MPI_Reduce( &local_max_bw, &global_max_bw, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD );
         MPI_Reduce( &local_avg_bw, &global_sum_bw, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD );
 
-        double global_avg_bw = global_sum_bw / num_processes;
+        const double global_avg_bw = global_sum_bw / num_processes;
 
         // One sample only: local stats = the single sample
         double local_min_dt = dt;
@@ -181,7 +176,7 @@ int main( int argc, char** argv )
         MPI_Reduce( &local_max_dt, &global_max_dt, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD );
         MPI_Reduce( &local_avg_dt, &global_sum_dt, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD );
 
-        double global_avg_dt = global_sum_dt / num_processes;
+        const double global_avg_dt = global_sum_dt / num_processes;
 
         if ( rank == 0 )
         {
@@ -193,21 +188,4 @@ int main( int argc, char** argv )
                       << global_avg_dt * 1e3 << " ms" << std::endl;
         }
     }
-
-    if ( use_gpu )
-    {
-#ifdef USE_CUDA
-        cudaFree( send_buf );
-        cudaFree( recv_buf );
-#endif
-    }
-    else
-    {
-        free( send_buf );
-        free( recv_buf );
-    }
-
-    MPI_Finalize();
-
-    return 0;
 }
