@@ -9,6 +9,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <numeric>
+#include <optional>
 #include <thread>
 #include <vector>
 
