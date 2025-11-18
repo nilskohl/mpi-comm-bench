@@ -68,8 +68,9 @@ int main( int argc, char** argv )
     {
         if ( rank == 0 )
         {
-            std::cout << "Usage: mpi_comm_bench [--msg-size=<msg-size-in-bytes>] [--interval=<interval-in-sec>] [--gpu]"
-                      << std::endl;
+            std::cout
+                << "Usage: mpi_comm_bench [--msg-size=<msg-size-in-bytes>] [--interval=<interval-in-sec>] [--gpu] [--mem-copy-local]"
+                << std::endl;
         }
 
         MPI_Finalize();
@@ -78,6 +79,8 @@ int main( int argc, char** argv )
 
     size_t msg_size     = 1024 * 1024;
     double interval_sec = 1.0;
+
+    const bool mem_copy_local = has_flag( argc, argv, "--mem-copy-local" );
 
     if ( const auto msg_size_opt = get_flag_value( argc, argv, "--msg-size" ); msg_size_opt.has_value() )
     {
@@ -94,10 +97,11 @@ int main( int argc, char** argv )
     if ( rank == 0 )
     {
         std::cout << "Ring comm benchmark." << std::endl;
-        std::cout << "Message size: " << msg_size << " bytes (~" << static_cast< double >( msg_size ) / 1e6 << " MB, ~"
+        std::cout << "Message size:   " << msg_size << " bytes (~" << static_cast< double >( msg_size ) / 1e6 << " MB, ~"
                   << static_cast< double >( msg_size ) / 1e9 << " GB)." << std::endl;
-        std::cout << "Interval:     " << interval_sec << " seconds." << std::endl;
-        std::cout << "GPU mode:     " << ( use_gpu ? "on" : "off" ) << std::endl;
+        std::cout << "Interval:       " << interval_sec << " seconds." << std::endl;
+        std::cout << "GPU mode:       " << ( use_gpu ? "on" : "off" ) << std::endl;
+        std::cout << "Mem copy local: " << ( mem_copy_local ? "on" : "off" ) << std::endl;
     }
 
     const int next = ( rank + 1 ) % num_processes;
@@ -163,19 +167,41 @@ int main( int argc, char** argv )
         MPI_Barrier( MPI_COMM_WORLD );
 
         auto t0 = std::chrono::steady_clock::now();
-        MPI_Sendrecv(
-            send_buf,
-            static_cast< int >( msg_size ),
-            MPI_UNSIGNED_CHAR,
-            next,
-            0,
-            recv_buf,
-            static_cast< int >( msg_size ),
-            MPI_UNSIGNED_CHAR,
-            prev,
-            0,
-            MPI_COMM_WORLD,
-            MPI_STATUS_IGNORE );
+
+        if ( mem_copy_local && rank == prev && rank == next )
+        {
+            if ( use_gpu )
+            {
+#ifdef USE_CUDA
+                cudaMemcpy( recv_buf, send_buf, msg_size, cudaMemcpyDeviceToDevice );
+#else
+                if ( rank == 0 )
+                    fprintf( stderr, "GPU mode requested but binary not built with USE_CUDA=1.\n" );
+                MPI_Abort( MPI_COMM_WORLD, 1 );
+#endif
+            }
+            else
+            {
+                std::memcpy( recv_buf, send_buf, msg_size );
+            }
+        }
+        else
+        {
+            MPI_Sendrecv(
+                send_buf,
+                static_cast< int >( msg_size ),
+                MPI_UNSIGNED_CHAR,
+                next,
+                0,
+                recv_buf,
+                static_cast< int >( msg_size ),
+                MPI_UNSIGNED_CHAR,
+                prev,
+                0,
+                MPI_COMM_WORLD,
+                MPI_STATUS_IGNORE );
+        }
+
         auto t1 = std::chrono::steady_clock::now();
 
         const double dt = std::chrono::duration< double >( t1 - t0 ).count();
