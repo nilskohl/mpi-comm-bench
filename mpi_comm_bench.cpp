@@ -109,6 +109,33 @@ int main( int argc, char** argv )
     if ( use_gpu )
     {
 #ifdef USE_CUDA
+
+        int         num_gpus = 0;
+        cudaError_t err      = cudaGetDeviceCount( &num_gpus );
+        if ( err != cudaSuccess )
+        {
+            if ( rank == 0 )
+            {
+                std::cerr << "CUDA error: " << cudaGetErrorString( err ) << "\n";
+            }
+            MPI_Abort( MPI_COMM_WORLD, -1 );
+        }
+
+        // Abort if there are not enough GPUs
+        if ( num_processes > num_gpus )
+        {
+            if ( rank == 0 )
+            {
+                std::cerr << "Not enough GPUs for MPI ranks! " << num_processes << " ranks but only " << num_gpus
+                          << " GPUs.\n";
+            }
+            MPI_Abort( MPI_COMM_WORLD, -1 );
+        }
+
+        // Assign one GPU per rank
+        int gpu_id = rank;
+        cudaSetDevice( gpu_id );
+
         checkCuda( cudaMalloc( &send_buf, msg_size ), "cudaMalloc" );
         checkCuda( cudaMalloc( &recv_buf, msg_size ), "cudaMalloc" );
 
