@@ -67,6 +67,18 @@ int main( int argc, char** argv )
     MPI_Comm_rank( MPI_COMM_WORLD, &rank );
     MPI_Comm_size( MPI_COMM_WORLD, &num_processes );
 
+    if ( has_flag( argc, argv, "-h" ) || has_flag( argc, argv, "--help" ) )
+    {
+        if ( rank == 0 )
+        {
+            std::cout << "Usage: mpi_comm_bench [--msg-size=<msg-size-in-bytes>] [--interval=<interval-in-sec>] [--gpu]"
+                      << std::endl;
+        }
+
+        MPI_Finalize();
+        return 0;
+    }
+
     size_t msg_size     = 1024 * 1024;
     double interval_sec = 1.0;
 
@@ -76,13 +88,19 @@ int main( int argc, char** argv )
         msg_size = static_cast< size_t >( std::stod( msg_size_opt.value() ) );
     }
 
+    auto interval_sec_opt = get_flag_value( argc, argv, "--interval" );
+    if ( interval_sec_opt.has_value() )
+    {
+        interval_sec = ( std::stod( interval_sec_opt.value() ) );
+    }
+
     const bool use_gpu = has_flag( argc, argv, "--gpu" );
 
     if ( rank == 0 )
     {
         std::cout << "Ring comm benchmark." << std::endl;
-        std::cout << "Message size: " << msg_size << " bytes (~" << static_cast< double >( msg_size ) / 1e9 << " GB)."
-                  << std::endl;
+        std::cout << "Message size: " << msg_size << " bytes (~" << static_cast< double >( msg_size ) / 1e6 << " MB, ~"
+                  << static_cast< double >( msg_size ) / 1e9 << " GB)." << std::endl;
         std::cout << "Interval:     " << interval_sec << " seconds." << std::endl;
         std::cout << "GPU mode:     " << ( use_gpu ? "on" : "off" ) << std::endl;
     }
